@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"marko-backend/internal/models"
 )
@@ -29,7 +28,8 @@ func (s *Store) List() ([]models.Note, error) {
 		return nil, err
 	}
 
-	var notes []models.Note
+	// Initialize as empty slice so it marshals to [] instead of null
+	notes := []models.Note{}
 	for _, f := range files {
 		if !f.IsDir() && strings.HasSuffix(f.Name(), ".md") {
 			info, err := f.Info()
@@ -61,6 +61,13 @@ func (s *Store) Get(id string) (models.Note, error) {
 	defer s.mu.RUnlock()
 
 	path := filepath.Join(s.Dir, id)
+	
+	// If file doesn't exist, try appending .md
+	// This helps when ID in URL is "note-123" but file is "note-123.md"
+	if _, err := os.Stat(path); os.IsNotExist(err) && !strings.HasSuffix(id, ".md") {
+		path = filepath.Join(s.Dir, id+".md")
+	}
+
 	// Security check to prevent directory traversal
 	if !strings.HasPrefix(filepath.Clean(path), filepath.Clean(s.Dir)) {
 		return models.Note{}, fmt.Errorf("invalid path")

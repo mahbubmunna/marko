@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 
 	"marko-backend/internal/filesystem"
 	"marko-backend/internal/handlers"
@@ -13,21 +12,8 @@ import (
 
 func main() {
 	// Initialize Store
-	cwd, err := os.Getwd()
-	if err != nil {
-		log.Fatal(err)
-	}
-	
-	// Assuming running from root or backend/
-	// We want data/notes to be relative to the PROJECT root if possible,
-	// but strictly we run backend from backend/ folder usually.
-	// Let's resolve data/notes relative to where we run.
 	// User said "Default directory: ./data/notes".
-	// If we run `go run cmd/server/main.go` from `backend/`, then `./data/notes` would be `backend/data/notes`.
-	// But project root has `data/notes`.
-	// So we might need to go up one level if we are in backend.
-	
-	// Heuristic: check if ../data/notes exists, else use ./data/notes
+	// We check if ../data/notes exists (running from backend/) or use ./data/notes
 	dataDir := "./data/notes"
 	if _, err := os.Stat("../data/notes"); err == nil {
 		dataDir = "../data/notes"

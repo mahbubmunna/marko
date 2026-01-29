@@ -2,11 +2,8 @@ package filesystem
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
-
-	"marko-backend/internal/models"
 )
 
 func TestStore_SaveAndGet(t *testing.T) {
@@ -30,11 +27,20 @@ func TestStore_SaveAndGet(t *testing.T) {
 	// ID might be normalized to test-note.md
 	note, err := store.Get(id + ".md")
 	if err != nil {
-		t.Errorf("Get failed: %v", err)
+		t.Errorf("Get failed with extension: %v", err)
+	}
+	
+	// Test Get without extension (should also work now)
+	noteNoExt, err := store.Get(id)
+	if err != nil {
+		t.Errorf("Get failed without extension: %v", err)
 	}
 
 	if note.Title != "Test Note" {
 		t.Errorf("Expected title 'Test Note', got '%s'", note.Title)
+	}
+	if noteNoExt.Title != "Test Note" {
+		t.Errorf("Expected title 'Test Note' (no ext), got '%s'", noteNoExt.Title)
 	}
 }
 

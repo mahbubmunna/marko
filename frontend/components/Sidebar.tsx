@@ -13,9 +13,12 @@ interface SidebarProps {
 export default function Sidebar({ notes }: SidebarProps) {
     const pathname = usePathname();
 
+    // Guard against undefined notes
+    const safeNotes = Array.isArray(notes) ? notes : [];
+
     // Simple grouping by folder logic could go here.
     // For now, flat list sorted by UpdatedAt
-    const sortedNotes = [...notes].sort((a, b) =>
+    const sortedNotes = [...safeNotes].sort((a, b) =>
         new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
 
