@@ -9,20 +9,28 @@ import (
 
 	"marko-backend/internal/filesystem"
 	"marko-backend/internal/models"
+	"marko-backend/internal/search"
 )
 
 type NoteHandler struct {
-	Store *filesystem.Store
+	Store         *filesystem.Store
+	SearchService *search.Service
 }
 
-func NewNoteHandler(store *filesystem.Store) *NoteHandler {
-	return &NoteHandler{Store: store}
+func NewNoteHandler(store *filesystem.Store, search *search.Service) *NoteHandler {
+	return &NoteHandler{Store: store, SearchService: search}
 }
 
 func (h *NoteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Simple router for now
 	path := strings.TrimPrefix(r.URL.Path, "/api/notes")
-	
+
+	// Search endpoint: /api/search?q=... (mapped in main, but let's handle here if logical or separate)
+	// Actually strict REST for /api/notes doesn't include search usually.
+	// The user requested GET /api/search. We should handle that in a separate handler method or main router.
+	// For simplicity, let's add a separate SearchHandler method and register it in main.
+	// But sticking to NoteHandler for now.
+
 	switch r.Method {
 	case http.MethodGet:
 		if path == "" || path == "/" {
@@ -52,7 +60,7 @@ func (h *NoteHandler) ListNotes(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(notes)
 }
@@ -82,7 +90,7 @@ func (h *NoteHandler) CreateNote(w http.ResponseWriter, r *http.Request) {
 		if parsed.Title != "" && parsed.Title != "Temp" {
 			req.Title = parsed.Title
 		}
-		
+
 		if req.Title != "" {
 			req.ID = slugify(req.Title)
 		} else {
@@ -93,6 +101,19 @@ func (h *NoteHandler) CreateNote(w http.ResponseWriter, r *http.Request) {
 	if err := h.Store.Save(req.ID, req.Content); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	// Index asynchronously or synchronously
+	if h.SearchService != nil {
+		// Need full note for indexing (title etc). Parse again or read back.
+		// Since we didn't parse full metadata from req.Content except for ID generation,
+		// let's parse it properly or Read back.
+		// Reading back is safer to stay in sync with what's on disk.
+		go func() {
+			if savedNote, err := h.Store.Get(req.ID); err == nil {
+				h.SearchService.Index(savedNote)
+			}
+		}()
 	}
 
 	w.WriteHeader(http.StatusCreated)
@@ -106,10 +127,25 @@ func (h *NoteHandler) UpdateNote(w http.ResponseWriter, r *http.Request, id stri
 		return
 	}
 
-	// ID from URL takes precedence
+	// Prepare note object for indexing (need ID and Title if possible)
+	// Currently req might only have Content. We need to parse full note to get Title for index.
+	// Store.Save writes raw bytes.
+	// Let's rely on Store to parse? Store.Save takes Content string.
+	// We can parse it here to get metadata for Indexing.
+	// OR we can read back from Store. reading back is safer.
+
 	if err := h.Store.Save(id, req.Content); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	if h.SearchService != nil {
+		go func() {
+			// Read back to get full parsed note
+			if savedNote, err := h.Store.Get(id); err == nil {
+				h.SearchService.Index(savedNote)
+			}
+		}()
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -120,7 +156,35 @@ func (h *NoteHandler) DeleteNote(w http.ResponseWriter, r *http.Request, id stri
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	if h.SearchService != nil {
+		go h.SearchService.Delete(id)
+	}
+
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *NoteHandler) Search(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		http.Error(w, "Query required", http.StatusBadRequest)
+		return
+	}
+
+	// Check if search service is available
+	if h.SearchService == nil {
+		http.Error(w, "Search service invalid/unavailable (check -tags fts5)", http.StatusServiceUnavailable)
+		return
+	}
+
+	results, err := h.SearchService.Search(query)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
 }
 
 func slugify(s string) string {

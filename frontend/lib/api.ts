@@ -14,6 +14,12 @@ export async function fetchNote(id: string): Promise<Note> {
     return res.json();
 }
 
+export async function searchNotes(query: string): Promise<Note[]> {
+  const res = await fetch(`${API_BASE.replace('/api/notes', '/api/search')}?q=${encodeURIComponent(query)}`);
+  if (!res.ok) throw new Error('Failed to search notes');
+  return res.json();
+}
+
 export async function createNote(content: string): Promise<{ id: string }> {
     const res = await fetch(API_BASE, {
         method: 'POST',

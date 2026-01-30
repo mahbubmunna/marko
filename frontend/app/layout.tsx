@@ -1,4 +1,5 @@
 import { fetchNotes } from '@/lib/api';
+import { Note } from '@/types';
 import Sidebar from '@/components/Sidebar';
 import './globals.css';
 import { Inter } from 'next/font/google';
@@ -17,7 +18,7 @@ export default async function RootLayout({
 }) {
   // Fetch notes on the server
   // In a real app we might handle error state better
-  let notes = [];
+  let notes: Note[] = [];
   try {
     notes = await fetchNotes();
   } catch (e) {
@@ -25,8 +26,8 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang="en">
-      <body className={`${inter.className} text-stone-800 bg-white h-screen flex overflow-hidden`}>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${inter.className} text-stone-800 bg-white h-screen flex overflow-hidden`} suppressHydrationWarning>
         <aside className="h-full flex-shrink-0">
           <Sidebar notes={notes} />
         </aside>
